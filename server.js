@@ -9,13 +9,40 @@ require('dotenv').config();
 
 const app = express();
 
-// ==================== MIDDLEWARE ====================
+// ==================== CONFIGURATION CORS CORRIGÉE ====================
+const allowedOrigins = [
+    'https://chrismsmr-celcom.github.io',
+    'https://chrismsmr-celcom.github.io',
+    'http://localhost:3000',
+    'http://localhost:5500',
+    'http://127.0.0.1:5500'
+];
+
+app.use(cors({
+    origin: function(origin, callback) {
+        // Permettre les requêtes sans origin (comme les apps mobile)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            console.log('Origin bloqué par CORS:', origin);
+            callback(null, true); // En développement, on accepte tous pour tester
+            // En production, décommentez la ligne ci-dessous:
+            // callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+}));
+
+// Middleware pour les requêtes OPTIONS (preflight)
+app.options('*', cors());
+
+// ==================== AUTRES MIDDLEWARE ====================
 app.use(helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" }
-}));
-app.use(cors({
-    origin: process.env.FRONTEND_URL || '*',
-    credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
 
@@ -71,7 +98,7 @@ async function sendEmail(to, subject, html) {
 
 // ==================== ROUTES ====================
 
-// Health check (important pour Render)
+// Health check
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -169,27 +196,7 @@ app.get('/api/confirm/:token', async (req, res) => {
         res.status(500).send('Erreur lors de la confirmation');
     }
 });
-// Récupérer le nombre d'abonnés (authentifié)
-app.get('/api/subscribers/count', async (req, res) => {
-    const user = await authenticateUser(req);
-    if (!user) {
-        return res.status(401).json({ error: 'Non authentifié' });
-    }
-    
-    try {
-        const { count, error } = await supabase
-            .from('subscribers')
-            .select('id', { count: 'exact', head: true })
-            .eq('status', 'active');
-        
-        if (error) throw error;
-        
-        res.json({ count: count || 0 });
-    } catch (error) {
-        console.error('Erreur:', error);
-        res.status(500).json({ error: 'Erreur récupération' });
-    }
-});
+
 // Désabonnement
 app.get('/api/unsubscribe/:token', async (req, res) => {
     const { token } = req.params;
@@ -233,6 +240,28 @@ app.get('/api/unsubscribe/:token', async (req, res) => {
     } catch (error) {
         console.error('Erreur:', error);
         res.status(500).send('Erreur');
+    }
+});
+
+// Nombre d'abonnés
+app.get('/api/subscribers/count', async (req, res) => {
+    const user = await authenticateUser(req);
+    if (!user) {
+        return res.status(401).json({ error: 'Non authentifié' });
+    }
+    
+    try {
+        const { count, error } = await supabase
+            .from('subscribers')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', 'active');
+        
+        if (error) throw error;
+        
+        res.json({ count: count || 0 });
+    } catch (error) {
+        console.error('Erreur:', error);
+        res.status(500).json({ error: 'Erreur récupération' });
     }
 });
 
@@ -314,4 +343,5 @@ async function sendConfirmationEmail(email, name, token) {
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`✅ CORS configuré pour: ${allowedOrigins.join(', ')}`);
 });

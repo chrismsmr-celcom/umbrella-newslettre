@@ -9,42 +9,58 @@ require('dotenv').config();
 
 const app = express();
 
-// ==================== CONFIGURATION CORS CORRIGÉE ====================
+// ==================== CONFIGURATION CORS COMPLÈTE ====================
+// Liste des origines autorisées
 const allowedOrigins = [
-    'https://chrismsmr-celcom.github.io',
     'https://chrismsmr-celcom.github.io',
     'http://localhost:3000',
     'http://localhost:5500',
-    'http://127.0.0.1:5500'
+    'http://127.0.0.1:5500',
+    'https://chrismsmr-celcom.github.io'
 ];
 
-app.use(cors({
-    origin: function(origin, callback) {
-        // Permettre les requêtes sans origin (comme les apps mobile)
+// Configuration CORS détaillée
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Permettre les requêtes sans origin (Postman, apps mobile)
         if (!origin) return callback(null, true);
         
         if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
-            console.log('Origin bloqué par CORS:', origin);
-            callback(null, true); // En développement, on accepte tous pour tester
-            // En production, décommentez la ligne ci-dessous:
+            console.log('❌ Origin bloqué:', origin);
+            // En développement, on accepte tous pour tester
+            callback(null, true);
+            // En production, utilisez:
             // callback(new Error('Not allowed by CORS'));
         }
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
-}));
+    optionsSuccessStatus: 200,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
+    exposedHeaders: ['Content-Length', 'X-Knowledge-Content-Length']
+};
 
-// Middleware pour les requêtes OPTIONS (preflight)
-app.options('*', cors());
+// Appliquer CORS avant toutes les routes
+app.use(cors(corsOptions));
+
+// Gérer explicitement les requêtes OPTIONS (preflight)
+app.options('*', cors(corsOptions));
 
 // ==================== AUTRES MIDDLEWARE ====================
 app.use(helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" }
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginOpenerPolicy: { policy: "unsafe-none" }
 }));
+
 app.use(express.json({ limit: '10mb' }));
+
+// Logger pour debug
+app.use((req, res, next) => {
+    console.log(`${req.method} ${req.url} - Origin: ${req.headers.origin}`);
+    next();
+});
 
 // Rate limiting
 const emailLimiter = rateLimit({
@@ -98,6 +114,22 @@ async function sendEmail(to, subject, html) {
 
 // ==================== ROUTES ====================
 
+// Route racine (pour vérifier que le serveur fonctionne)
+app.get('/', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        message: 'Umbrella Newsletter API is running',
+        endpoints: [
+            'GET /api/health',
+            'POST /api/subscribe',
+            'GET /api/confirm/:token',
+            'GET /api/unsubscribe/:token',
+            'GET /api/subscribers/count',
+            'POST /api/newsletter/send'
+        ]
+    });
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -105,6 +137,8 @@ app.get('/api/health', (req, res) => {
 
 // Inscription avec double opt-in
 app.post('/api/subscribe', async (req, res) => {
+    console.log('📧 Requête d\'inscription reçue:', req.body);
+    
     const { email, name, source } = req.body;
     
     if (!email) {
@@ -112,6 +146,7 @@ app.post('/api/subscribe', async (req, res) => {
     }
     
     try {
+        // Vérifier si l'email existe déjà
         const { data: existing } = await supabase
             .from('subscribers')
             .select('id, status')
@@ -124,21 +159,25 @@ app.post('/api/subscribe', async (req, res) => {
         
         const token = generateToken();
         
+        // Ajouter l'abonné
         const { error } = await supabase
             .from('subscribers')
             .insert({
                 email,
-                name,
+                name: name || null,
                 status: 'pending',
                 confirmation_token: token,
-                ip_address: req.ip,
+                ip_address: req.ip || req.headers['x-forwarded-for'] || 'unknown',
                 user_agent: req.headers['user-agent'],
-                source
+                source: source || 'api'
             });
         
         if (error) throw error;
         
+        // Envoyer l'email de confirmation
         await sendConfirmationEmail(email, name, token);
+        
+        console.log(`✅ Email de confirmation envoyé à ${email}`);
         
         res.json({ 
             success: true, 
@@ -146,7 +185,7 @@ app.post('/api/subscribe', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Erreur:', error);
+        console.error('Erreur inscription:', error);
         res.status(500).json({ error: 'Erreur lors de l\'inscription' });
     }
 });
@@ -154,6 +193,7 @@ app.post('/api/subscribe', async (req, res) => {
 // Confirmation
 app.get('/api/confirm/:token', async (req, res) => {
     const { token } = req.params;
+    console.log(`🔐 Confirmation du token: ${token}`);
     
     try {
         const { data: subscriber, error } = await supabase
@@ -168,31 +208,50 @@ app.get('/api/confirm/:token', async (req, res) => {
             .single();
         
         if (error || !subscriber) {
-            return res.status(400).send('Token invalide');
+            console.log('❌ Token invalide:', token);
+            return res.status(400).send(`
+                <!DOCTYPE html>
+                <html>
+                <head><meta charset="UTF-8"><title>Erreur</title></head>
+                <body style="font-family: Arial; text-align: center; padding: 50px;">
+                    <h1 style="color: #ef4444;">❌ Lien invalide</h1>
+                    <p>Ce lien de confirmation est invalide ou a expiré.</p>
+                    <a href="${process.env.FRONTEND_URL}/subscribe.html" style="color: #f5c400;">S'inscrire à nouveau</a>
+                </body>
+                </html>
+            `);
         }
         
+        // Créer un token de désabonnement
         const unsubscribeToken = generateToken();
         await supabase
             .from('unsubscribe_links')
             .insert({
                 subscriber_id: subscriber.id,
-                token: unsubscribeToken
+                token: unsubscribeToken,
+                expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
             });
+        
+        console.log(`✅ Email confirmé: ${subscriber.email}`);
         
         res.send(`
             <!DOCTYPE html>
             <html>
             <head><meta charset="UTF-8"><title>Confirmation</title></head>
-            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-                <h1>✅ Confirmation réussie !</h1>
-                <p>Votre email ${subscriber.email} est maintenant inscrit.</p>
-                <a href="${process.env.FRONTEND_URL}" style="color: #f5c400;">Retour au site</a>
+            <body style="font-family: 'Plus Jakarta Sans', sans-serif; text-align: center; padding: 50px; background: #f8fafc;">
+                <div style="max-width: 500px; margin: 0 auto; background: white; border-radius: 24px; padding: 40px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
+                    <div style="font-size: 4rem;">✅</div>
+                    <h1 style="color: #0f172a;">Confirmation réussie !</h1>
+                    <p>Votre email <strong>${subscriber.email}</strong> est maintenant inscrit à la newsletter Umbrella.</p>
+                    <p>Vous recevrez bientôt nos actualités et offres exclusives.</p>
+                    <a href="${process.env.FRONTEND_URL}" style="display: inline-block; background: #f5c400; color: #0f172a; padding: 12px 30px; border-radius: 40px; text-decoration: none; font-weight: 600; margin-top: 20px;">Retour au site</a>
+                </div>
             </body>
             </html>
         `);
         
     } catch (error) {
-        console.error('Erreur:', error);
+        console.error('Erreur confirmation:', error);
         res.status(500).send('Erreur lors de la confirmation');
     }
 });
@@ -200,6 +259,7 @@ app.get('/api/confirm/:token', async (req, res) => {
 // Désabonnement
 app.get('/api/unsubscribe/:token', async (req, res) => {
     const { token } = req.params;
+    console.log(`🔓 Désabonnement du token: ${token}`);
     
     try {
         const { data: link } = await supabase
@@ -209,7 +269,16 @@ app.get('/api/unsubscribe/:token', async (req, res) => {
             .single();
         
         if (!link) {
-            return res.status(400).send('Lien invalide');
+            return res.status(400).send(`
+                <!DOCTYPE html>
+                <html>
+                <head><meta charset="UTF-8"><title>Erreur</title></head>
+                <body style="font-family: Arial; text-align: center; padding: 50px;">
+                    <h1 style="color: #ef4444;">❌ Lien invalide</h1>
+                    <p>Ce lien de désabonnement est invalide.</p>
+                </body>
+                </html>
+            `);
         }
         
         await supabase
@@ -225,25 +294,31 @@ app.get('/api/unsubscribe/:token', async (req, res) => {
             .delete()
             .eq('token', token);
         
+        console.log(`✅ Désabonnement confirmé`);
+        
         res.send(`
             <!DOCTYPE html>
             <html>
             <head><meta charset="UTF-8"><title>Désabonnement</title></head>
-            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-                <h1>✅ Désabonnement confirmé</h1>
-                <p>Vous ne recevrez plus nos newsletters.</p>
-                <a href="${process.env.FRONTEND_URL}" style="color: #f5c400;">Retour au site</a>
+            <body style="font-family: 'Plus Jakarta Sans', sans-serif; text-align: center; padding: 50px; background: #f8fafc;">
+                <div style="max-width: 500px; margin: 0 auto; background: white; border-radius: 24px; padding: 40px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
+                    <div style="font-size: 4rem;">✅</div>
+                    <h1 style="color: #0f172a;">Désabonnement confirmé</h1>
+                    <p>Vous ne recevrez plus nos newsletters.</p>
+                    <p>Vous pouvez vous réabonner à tout moment sur notre site.</p>
+                    <a href="${process.env.FRONTEND_URL}/subscribe.html" style="display: inline-block; background: #f5c400; color: #0f172a; padding: 12px 30px; border-radius: 40px; text-decoration: none; font-weight: 600; margin-top: 20px;">Se réabonner</a>
+                </div>
             </body>
             </html>
         `);
         
     } catch (error) {
-        console.error('Erreur:', error);
+        console.error('Erreur désabonnement:', error);
         res.status(500).send('Erreur');
     }
 });
 
-// Nombre d'abonnés
+// Nombre d'abonnés (authentifié)
 app.get('/api/subscribers/count', async (req, res) => {
     const user = await authenticateUser(req);
     if (!user) {
@@ -289,6 +364,10 @@ app.post('/api/newsletter/send', emailLimiter, async (req, res) => {
             .select('id, email')
             .eq('status', 'active');
         
+        if (!subscribers || subscribers.length === 0) {
+            return res.json({ success: true, sent: 0, total: 0, message: 'Aucun abonné actif' });
+        }
+        
         let sentCount = 0;
         
         for (const sub of subscribers) {
@@ -327,21 +406,30 @@ async function sendConfirmationEmail(email, name, token) {
         <!DOCTYPE html>
         <html>
         <head><meta charset="UTF-8"><title>Confirmation</title></head>
-        <body style="font-family: Arial, sans-serif; padding: 40px;">
-            <div style="max-width: 500px; margin: 0 auto;">
-                <h1>Confirmez votre inscription</h1>
-                <p>Bonjour${name ? ` ${name}` : ''},</p>
-                <a href="${confirmUrl}" style="background: #f5c400; color: #0f172a; padding: 12px 24px; text-decoration: none; border-radius: 40px; display: inline-block;">Confirmer</a>
+        <body style="font-family: 'Plus Jakarta Sans', sans-serif; padding: 40px; background: #f8fafc;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; border-radius: 24px; padding: 40px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <div style="font-size: 3rem;">📧</div>
+                </div>
+                <h1 style="color: #0f172a; text-align: center; font-size: 1.5rem;">Confirmez votre inscription</h1>
+                <p style="color: #334155; margin: 20px 0;">Bonjour${name ? ` ${name}` : ''},</p>
+                <p style="color: #334155;">Merci de vous être inscrit à la newsletter Umbrella. Pour confirmer votre abonnement, cliquez sur le bouton ci-dessous :</p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="${confirmUrl}" style="background: #f5c400; color: #0f172a; padding: 12px 30px; border-radius: 40px; text-decoration: none; display: inline-block; font-weight: 600;">Confirmer mon inscription</a>
+                </div>
+                <p style="color: #64748b; font-size: 0.8rem; text-align: center;">Si vous n'avez pas demandé cette inscription, ignorez simplement cet email.</p>
+                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+                <p style="color: #94a3b8; font-size: 0.7rem; text-align: center;">© ${new Date().getFullYear()} Umbrella. Tous droits réservés.</p>
             </div>
         </body>
         </html>
     `;
     
-    await sendEmail(email, 'Confirmez votre inscription', html);
+    await sendEmail(email, 'Confirmez votre inscription à la newsletter Umbrella', html);
 }
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`✅ CORS configuré pour: ${allowedOrigins.join(', ')}`);
+    console.log(`✅ CORS activé pour les origines: ${allowedOrigins.join(', ')}`);
 });

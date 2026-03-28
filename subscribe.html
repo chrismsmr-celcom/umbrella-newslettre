@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>S'abonner | Umbrella Newsletter</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .subscribe-container {
+            max-width: 500px;
+            width: 100%;
+            background: white;
+            border-radius: 32px;
+            padding: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+            text-align: center;
+        }
+        
+        .logo {
+            width: 120px;
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+            color: #0f172a;
+        }
+        
+        .subtitle {
+            color: #64748b;
+            margin-bottom: 30px;
+            font-size: 0.9rem;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        
+        label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #64748b;
+            margin-bottom: 8px;
+        }
+        
+        input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            font-family: inherit;
+            font-size: 1rem;
+            transition: 0.2s;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #f5c400;
+            box-shadow: 0 0 0 3px rgba(245,196,0,0.1);
+        }
+        
+        .btn-subscribe {
+            width: 100%;
+            background: #f5c400;
+            color: #0f172a;
+            border: none;
+            padding: 14px;
+            border-radius: 40px;
+            font-weight: 800;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .btn-subscribe:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(245,196,0,0.2);
+            background: #e6b800;
+        }
+        
+        .btn-subscribe:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .message {
+            margin-top: 20px;
+            padding: 12px;
+            border-radius: 12px;
+            display: none;
+        }
+        
+        .message.success {
+            background: #d1fae5;
+            color: #065f46;
+            display: block;
+        }
+        
+        .message.error {
+            background: #fee2e2;
+            color: #991b1b;
+            display: block;
+        }
+        
+        .message.info {
+            background: #fef3c7;
+            color: #92400e;
+            display: block;
+        }
+        
+        .footer {
+            margin-top: 30px;
+            font-size: 0.7rem;
+            color: #94a3b8;
+        }
+        
+        .footer a {
+            color: #f5c400;
+            text-decoration: none;
+        }
+        
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 20px;
+            color: #64748b;
+            text-decoration: none;
+            font-size: 0.8rem;
+        }
+        
+        .back-link:hover {
+            color: #f5c400;
+        }
+        
+        .features {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .feature {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.7rem;
+            color: #64748b;
+        }
+        
+        .feature i {
+            color: #f5c400;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+<div class="subscribe-container">
+    <img src="https://i.postimg.cc/MGXwDDmH/Moniteo-removebg-preview.png" alt="Umbrella" class="logo">
+    <h1>Restez informé</h1>
+    <p class="subtitle">Recevez nos actualités, offres exclusives et conseils directement dans votre boîte mail.</p>
+
+    <form id="subscribeForm">
+        <div class="form-group">
+            <label><i class="fa fa-user"></i> Nom complet</label>
+            <input type="text" id="name" placeholder="Jean Dupont">
+        </div>
+        <div class="form-group">
+            <label><i class="fa fa-envelope"></i> Adresse email</label>
+            <input type="email" id="email" placeholder="jean@exemple.com" required>
+        </div>
+        <button type="submit" class="btn-subscribe" id="subscribeBtn">
+            <i class="fa fa-paper-plane"></i> S'abonner
+        </button>
+    </form>
+
+    <div id="message" class="message"></div>
+
+    <div class="features">
+        <div class="feature"><i class="fa fa-rocket"></i> Actualités exclusives</div>
+        <div class="feature"><i class="fa fa-tag"></i> Offres privilèges</div>
+        <div class="feature"><i class="fa fa-graduation-cap"></i> Conseils pro</div>
+    </div>
+
+    <div class="footer">
+        <p>📧 Aucun spam, désabonnement à tout moment.</p>
+        <p>En vous abonnant, vous acceptez notre <a href="#">politique de confidentialité</a>.</p>
+    </div>
+
+    <a href="index.html" class="back-link">
+        <i class="fa fa-arrow-left"></i> Retour au site
+    </a>
+</div>
+
+<script>
+    const API_URL = 'https://umbrella-newsletter-api.onrender.com';
+    
+    document.getElementById('subscribeForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const name = document.getElementById('name').value;
+        const email = document.getElementById('email').value;
+        const btn = document.getElementById('subscribeBtn');
+        const messageDiv = document.getElementById('message');
+        
+        if (!email) {
+            showMessage('Veuillez entrer votre email', 'error');
+            return;
+        }
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Envoi en cours...';
+        
+        try {
+            const response = await fetch(`${API_URL}/api/subscribe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name,
+                    email: email,
+                    source: 'page_inscription'
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                showMessage('✅ Un email de confirmation vous a été envoyé ! Vérifiez votre boîte de réception.', 'success');
+                document.getElementById('subscribeForm').reset();
+            } else {
+                showMessage(result.error || 'Erreur lors de l\'inscription', 'error');
+            }
+        } catch (error) {
+            console.error('Erreur:', error);
+            showMessage('Erreur de connexion. Veuillez réessayer.', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa fa-paper-plane"></i> S\'abonner';
+        }
+    });
+    
+    function showMessage(text, type) {
+        const messageDiv = document.getElementById('message');
+        messageDiv.className = `message ${type}`;
+        messageDiv.innerHTML = text;
+        setTimeout(() => {
+            messageDiv.style.display = 'none';
+            messageDiv.className = 'message';
+        }, 5000);
+    }
+</script>
+</body>
+</html>

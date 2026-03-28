@@ -397,6 +397,25 @@
             opacity: 0.5;
             pointer-events: none;
         }
+
+        .subscribers-stats {
+            background: var(--accent);
+            color: var(--primary);
+            border-radius: 12px;
+            padding: 12px;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .subscribers-stats .count {
+            font-size: 1.5rem;
+            font-weight: 800;
+        }
+
+        .subscribers-stats .label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+        }
     </style>
 </head>
 <body>
@@ -407,6 +426,11 @@
     <div class="sidebar">
         <div class="auth-status" id="authStatus">
             <i class="fa fa-spinner fa-spin"></i> Chargement...
+        </div>
+        
+        <div id="subscribersStats" class="subscribers-stats" style="display: none;">
+            <div class="count" id="subscribersCount">0</div>
+            <div class="label">abonnés actifs</div>
         </div>
         
         <div class="sidebar-section">
@@ -446,6 +470,18 @@
                 <input type="text" id="subject" value="Votre newsletter Umbrella" oninput="renderCanvas()">
             </div>
         </div>
+        
+        <div class="sidebar-section">
+            <h3><i class="fa fa-link"></i> Liens utiles</h3>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <a href="subscribe.html" style="color: var(--accent); text-decoration: none; font-size: 0.8rem;">
+                    <i class="fa fa-user-plus"></i> Page d'inscription
+                </a>
+                <a href="index.html" style="color: var(--text-muted); text-decoration: none; font-size: 0.8rem;">
+                    <i class="fa fa-home"></i> Retour au Dashboard
+                </a>
+            </div>
+        </div>
     </div>
 
     <div>
@@ -454,6 +490,7 @@
                 <button class="tool-btn" onclick="saveNewsletter()"><i class="fa fa-save"></i> Sauvegarder</button>
                 <button class="tool-btn" onclick="exportHTML()"><i class="fa fa-code"></i> Exporter HTML</button>
                 <button class="tool-btn" onclick="clearCanvas()"><i class="fa fa-trash"></i> Tout effacer</button>
+                <button class="tool-btn" onclick="refreshSubscribersCount()"><i class="fa fa-refresh"></i> Actualiser abonnés</button>
             </div>
             <div class="canvas-editor" id="canvasEditor">
                 <div class="email-canvas" id="emailCanvas"></div>
@@ -465,11 +502,11 @@
             <div class="form-group">
                 <label>Destinataires</label>
                 <select id="recipientList" class="form-control" style="width:100%;">
-                    <option value="all">📧 Tous les abonnés actifs</option>
+                    <option value="all">📧 Tous les abonnés actifs (<span id="recipientCount">0</span>)</option>
                     <option value="test">🔧 Test (email uniquement)</option>
                 </select>
             </div>
-            <div class="form-group" id="testEmailGroup">
+            <div class="form-group" id="testEmailGroup" style="display: none;">
                 <label>Email de test</label>
                 <input type="email" id="testEmail" placeholder="test@exemple.com">
             </div>
@@ -509,6 +546,7 @@
     let currentUser = null;
     let blocks = [];
     let editingBlockIndex = null;
+    let subscribersCount = 0;
     
     // Templates
     const templates = {
@@ -545,6 +583,7 @@
             const { data: { session } } = await supabase.auth.getSession();
             
             const sendPanel = document.getElementById('sendPanel');
+            const statsDiv = document.getElementById('subscribersStats');
             
             if (session) {
                 currentUser = session.user;
@@ -556,6 +595,8 @@
                     </button>
                 `;
                 if (sendPanel) sendPanel.classList.remove('disabled-panel');
+                if (statsDiv) statsDiv.style.display = 'block';
+                await refreshSubscribersCount();
             } else {
                 document.getElementById('authStatus').innerHTML = `
                     <i class="fa fa-user-circle" style="font-size:1.2rem;"></i>
@@ -565,6 +606,7 @@
                     </button>
                 `;
                 if (sendPanel) sendPanel.classList.add('disabled-panel');
+                if (statsDiv) statsDiv.style.display = 'none';
             }
         } catch (error) {
             console.error('Erreur auth:', error);
@@ -586,6 +628,24 @@
     async function logout() {
         await supabase.auth.signOut();
         location.reload();
+    }
+    
+    // ==================== RÉCUPÉRER LE NOMBRE D'ABONNÉS ====================
+    async function refreshSubscribersCount() {
+        if (!currentUser) return;
+        
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const response = await fetch(`${API_URL}/api/subscribers/count`, {
+                headers: { 'Authorization': `Bearer ${session?.access_token}` }
+            });
+            const data = await response.json();
+            subscribersCount = data.count || 0;
+            document.getElementById('subscribersCount').innerText = subscribersCount;
+            document.getElementById('recipientCount').innerText = subscribersCount;
+        } catch (error) {
+            console.error('Erreur chargement abonnés:', error);
+        }
     }
     
     // ==================== TOAST ====================
@@ -723,14 +783,14 @@
                         </div>`;
             
             if (block.type === 'text') {
-                html += `<p style="line-height: 1.6;">${block.content}</p>`;
+                html += `<p style="line-height: 1.6;">${escapeHtml(block.content)}</p>`;
             } else if (block.type === 'title') {
-                html += `<h2 style="font-size: 1.5rem; margin: 10px 0; color: var(--primary);">${block.content}</h2>`;
+                html += `<h2 style="font-size: 1.5rem; margin: 10px 0; color: var(--primary);">${escapeHtml(block.content)}</h2>`;
             } else if (block.type === 'image') {
-                html += `<img src="${block.content}" style="max-width: 100%; border-radius: 12px;">`;
+                html += `<img src="${escapeHtml(block.content)}" style="max-width: 100%; border-radius: 12px;">`;
             } else if (block.type === 'button') {
                 html += `<div style="text-align: center; margin: 20px 0;">
-                            <a href="${block.url}" style="background: var(--accent); color: var(--primary); padding: 12px 30px; border-radius: 40px; text-decoration: none; display: inline-block; font-weight: 600;">${block.content}</a>
+                            <a href="${escapeHtml(block.url)}" style="background: var(--accent); color: var(--primary); padding: 12px 30px; border-radius: 40px; text-decoration: none; display: inline-block; font-weight: 600;">${escapeHtml(block.content)}</a>
                          </div>`;
             } else if (block.type === 'divider') {
                 html += `<hr style="border: none; border-top: 1px solid var(--border); margin: 20px 0;">`;
@@ -753,13 +813,20 @@
         canvas.innerHTML = html;
     }
     
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
     function generateEmailHTML() {
         let content = '';
         blocks.forEach(block => {
-            if (block.type === 'text') content += `<p style="line-height: 1.6;">${block.content}</p>`;
-            else if (block.type === 'title') content += `<h2 style="font-size: 1.5rem; margin: 15px 0 10px;">${block.content}</h2>`;
-            else if (block.type === 'image') content += `<img src="${block.content}" style="max-width: 100%; border-radius: 12px; margin: 10px 0;">`;
-            else if (block.type === 'button') content += `<div style="text-align: center; margin: 20px 0;"><a href="${block.url}" style="background: #f5c400; color: #0f172a; padding: 12px 30px; border-radius: 40px; text-decoration: none; display: inline-block; font-weight: 600;">${block.content}</a></div>`;
+            if (block.type === 'text') content += `<p style="line-height: 1.6;">${escapeHtml(block.content)}</p>`;
+            else if (block.type === 'title') content += `<h2 style="font-size: 1.5rem; margin: 15px 0 10px;">${escapeHtml(block.content)}</h2>`;
+            else if (block.type === 'image') content += `<img src="${escapeHtml(block.content)}" style="max-width: 100%; border-radius: 12px; margin: 10px 0;">`;
+            else if (block.type === 'button') content += `<div style="text-align: center; margin: 20px 0;"><a href="${escapeHtml(block.url)}" style="background: #f5c400; color: #0f172a; padding: 12px 30px; border-radius: 40px; text-decoration: none; display: inline-block; font-weight: 600;">${escapeHtml(block.content)}</a></div>`;
             else if (block.type === 'divider') content += `<hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">`;
             else if (block.type === 'social') content += `<div style="text-align: center; margin: 20px 0;"><a href="#" style="color: #64748b; margin: 0 10px;">Facebook</a> | <a href="#" style="color: #64748b; margin: 0 10px;">Twitter</a> | <a href="#" style="color: #64748b; margin: 0 10px;">LinkedIn</a></div>`;
         });
@@ -767,11 +834,11 @@
         return `
             <!DOCTYPE html>
             <html>
-            <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${document.getElementById('subject').value}</title></head>
+            <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${escapeHtml(document.getElementById('subject').value)}</title></head>
             <body style="font-family: 'Plus Jakarta Sans', sans-serif; margin: 0; padding: 20px; background: #f8fafc;">
                 <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
                     <div style="background: #f5c400; padding: 20px; text-align: center;">
-                        <h2 style="margin: 0; color: #0f172a;">${document.getElementById('senderName').value}</h2>
+                        <h2 style="margin: 0; color: #0f172a;">${escapeHtml(document.getElementById('senderName').value)}</h2>
                     </div>
                     <div style="padding: 30px;">${content}</div>
                     <div style="background: #f8fafc; padding: 20px; text-align: center; font-size: 12px; color: #64748b;">
@@ -850,7 +917,12 @@
             return;
         }
         
-        if (!confirm('Envoyer cette newsletter à tous les abonnés ? Cette action est définitive.')) return;
+        if (subscribersCount === 0) {
+            showToast('Aucun abonné actif. Ajoutez des abonnés d\'abord.', 'warning');
+            return;
+        }
+        
+        if (!confirm(`Envoyer cette newsletter à ${subscribersCount} abonné(s) ? Cette action est définitive.`)) return;
         
         showToast('Envoi en cours...', 'info');
         

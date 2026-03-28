@@ -240,7 +240,11 @@
         try {
             const response = await fetch(`${API_URL}/api/subscribe`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                mode: 'cors',
                 body: JSON.stringify({
                     name: name,
                     email: email,
@@ -248,9 +252,14 @@
                 })
             });
             
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Erreur ${response.status}`);
+            }
+            
             const result = await response.json();
             
-            if (response.ok && result.success) {
+            if (result.success) {
                 showMessage('✅ Un email de confirmation vous a été envoyé ! Vérifiez votre boîte de réception.', 'success');
                 document.getElementById('subscribeForm').reset();
             } else {
@@ -258,7 +267,13 @@
             }
         } catch (error) {
             console.error('Erreur:', error);
-            showMessage('Erreur de connexion. Veuillez réessayer.', 'error');
+            let errorMsg = 'Erreur de connexion. Veuillez réessayer.';
+            if (error.message === 'Failed to fetch') {
+                errorMsg = '❌ Impossible de contacter le serveur. Vérifiez votre connexion ou réessayez plus tard.';
+            } else if (error.message.includes('CORS')) {
+                errorMsg = '❌ Problème de connexion au serveur. Réessayez dans quelques instants.';
+            }
+            showMessage(errorMsg, 'error');
         } finally {
             btn.disabled = false;
             btn.innerHTML = '<i class="fa fa-paper-plane"></i> S\'abonner';

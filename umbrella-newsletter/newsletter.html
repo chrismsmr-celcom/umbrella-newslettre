@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Newsletter Pro | Umbrella®</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --primary: #1e293b;
+            --accent: #f5c400;
+            --success: #10b981;
+            --danger: #ef4444;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --border: #e2e8f0;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); padding: 20px; }
+        
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 12px; }
+        .toast { background: var(--card); border-radius: 12px; padding: 14px 20px; min-width: 280px; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); display: flex; align-items: center; gap: 12px; animation: slideInRight 0.3s ease; border-left: 4px solid; }
+        .toast.success { border-left-color: var(--success); }
+        .toast.error { border-left-color: var(--danger); }
+        .toast.info { border-left-color: var(--accent); }
+        @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        
+        .main-container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 320px 1fr; gap: 25px; }
+        @media (max-width: 900px) { .main-container { grid-template-columns: 1fr; } }
+        
+        .sidebar { background: var(--card); border-radius: 24px; border: 1px solid var(--border); padding: 20px; height: fit-content; }
+        .sidebar-section { margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+        .sidebar-section h3 { font-size: 0.85rem; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; color: #64748b; text-transform: uppercase; }
+        
+        .template-gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .template-card { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px; text-align: center; cursor: pointer; transition: 0.2s; }
+        .template-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+        .template-card i { font-size: 1.5rem; color: var(--accent); margin-bottom: 5px; }
+        
+        .blocks-list { display: flex; flex-wrap: wrap; gap: 8px; }
+        .block-btn { background: var(--bg); border: 1px solid var(--border); padding: 8px 12px; border-radius: 40px; font-size: 0.7rem; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+        .block-btn:hover { background: var(--accent); color: var(--primary); }
+        
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 5px; }
+        .form-group input, .form-group textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; font-family: inherit; background: var(--bg); }
+        
+        .editor-area { background: var(--card); border-radius: 24px; border: 1px solid var(--border); overflow: hidden; }
+        .editor-toolbar { background: var(--bg); padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; gap: 8px; flex-wrap: wrap; }
+        .tool-btn { background: none; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 0.75rem; color: #64748b; }
+        .tool-btn:hover { background: var(--border); color: var(--accent); }
+        
+        .canvas-editor { padding: 30px; min-height: 500px; background: #f1f5f9; }
+        .email-canvas { max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.1); overflow: hidden; }
+        .email-block { position: relative; padding: 20px; border-bottom: 1px solid var(--border); transition: 0.2s; cursor: pointer; }
+        .email-block:hover { background: #fef9e6; }
+        .email-block:hover .block-actions { display: flex; }
+        .block-actions { position: absolute; top: 10px; right: 10px; display: none; gap: 5px; background: white; border-radius: 8px; padding: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .block-action { background: none; border: none; padding: 5px 8px; cursor: pointer; border-radius: 6px; font-size: 0.7rem; }
+        .block-action.delete:hover { background: #fee2e2; color: var(--danger); }
+        
+        .send-panel { margin-top: 20px; padding: 20px; background: var(--bg); border-radius: 16px; border: 1px solid var(--border); }
+        .btn-primary { background: var(--accent); color: var(--primary); border: none; padding: 10px 20px; border-radius: 40px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+        .btn-secondary { background: var(--bg); border: 1px solid var(--border); padding: 10px 20px; border-radius: 40px; font-weight: 600; cursor: pointer; }
+        .back-link { display: inline-flex; align-items: center; gap: 8px; color: #64748b; text-decoration: none; font-size: 0.8rem; margin-top: 20px; }
+        .back-link:hover { color: var(--accent); }
+        
+        .image-upload-area { border: 2px dashed var(--border); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; margin: 10px 0; }
+        .image-upload-area:hover { border-color: var(--accent); background: rgba(245,196,0,0.05); }
+        
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--card); border-radius: 24px; padding: 25px; max-width: 500px; width: 90%; }
+        .auth-status { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; padding: 10px; background: var(--bg); border-radius: 12px; }
+        .auth-status img { width: 32px; height: 32px; border-radius: 50%; }
+    </style>
+</head>
+<body>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<div class="main-container">
+    <div class="sidebar">
+        <div class="auth-status" id="authStatus">
+            <i class="fa fa-spinner fa-spin"></i> Chargement...
+        </div>
+        
+        <div class="sidebar-section">
+            <h3><i class="fa fa-palette"></i> Templates</h3>
+            <div class="template-gallery">
+                <div class="template-card" onclick="loadTemplate('welcome')"><i class="fa fa-hand-peace"></i><p>Bienvenue</p></div>
+                <div class="template-card" onclick="loadTemplate('promo')"><i class="fa fa-tag"></i><p>Promotion</p></div>
+                <div class="template-card" onclick="loadTemplate('news')"><i class="fa fa-newspaper"></i><p>Actualités</p></div>
+                <div class="template-card" onclick="loadTemplate('event')"><i class="fa fa-calendar"></i><p>Événement</p></div>
+            </div>
+        </div>
+
+        <div class="sidebar-section">
+            <h3><i class="fa fa-cubes"></i> Ajouter un bloc</h3>
+            <div class="blocks-list">
+                <button class="block-btn" onclick="addBlock('text')"><i class="fa fa-align-left"></i> Texte</button>
+                <button class="block-btn" onclick="addBlock('image')"><i class="fa fa-image"></i> Image</button>
+                <button class="block-btn" onclick="addBlock('button')"><i class="fa fa-square"></i> Bouton</button>
+                <button class="block-btn" onclick="addBlock('title')"><i class="fa fa-heading"></i> Titre</button>
+                <button class="block-btn" onclick="addBlock('divider')"><i class="fa fa-minus"></i> Séparateur</button>
+                <button class="block-btn" onclick="addBlock('social')"><i class="fa fa-share-alt"></i> Réseaux</button>
+            </div>
+        </div>
+
+        <div class="sidebar-section">
+            <h3><i class="fa fa-cog"></i> Paramètres</h3>
+            <div class="form-group">
+                <label>Expéditeur</label>
+                <input type="text" id="senderName" value="Umbrella®" oninput="renderCanvas()">
+            </div>
+            <div class="form-group">
+                <label>Email expéditeur</label>
+                <input type="email" id="senderEmail" value="newsletter@umbrella.com" oninput="renderCanvas()">
+            </div>
+            <div class="form-group">
+                <label>Sujet</label>
+                <input type="text" id="subject" value="Votre newsletter Umbrella" oninput="renderCanvas()">
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <div class="editor-area">
+            <div class="editor-toolbar">
+                <button class="tool-btn" onclick="saveNewsletter()"><i class="fa fa-save"></i> Sauvegarder</button>
+                <button class="tool-btn" onclick="exportHTML()"><i class="fa fa-code"></i> Exporter HTML</button>
+            </div>
+            <div class="canvas-editor" id="canvasEditor">
+                <div class="email-canvas" id="emailCanvas"></div>
+            </div>
+        </div>
+
+        <div class="send-panel">
+            <h3><i class="fa fa-paper-plane"></i> Envoyer la newsletter</h3>
+            <div class="form-group">
+                <label>Destinataires</label>
+                <select id="recipientList" class="form-control" style="width:100%; padding:10px; border-radius:10px;">
+                    <option value="all">📧 Tous les abonnés actifs</option>
+                    <option value="test">🔧 Test (email uniquement)</option>
+                </select>
+            </div>
+            <div class="form-group" id="testEmailGroup">
+                <label>Email de test</label>
+                <input type="email" id="testEmail" placeholder="test@exemple.com">
+            </div>
+            <div class="action-buttons" style="display: flex; gap: 12px; margin-top: 15px;">
+                <button class="btn-primary" onclick="sendTestEmail()">
+                    <i class="fa fa-flask"></i> Envoyer un test
+                </button>
+                <button class="btn-primary" onclick="sendNewsletter()">
+                    <i class="fa fa-rocket"></i> Envoyer à tous
+                </button>
+            </div>
+        </div>
+
+        <a href="index.html" class="back-link"><i class="fa fa-arrow-left"></i> Retour au Dashboard</a>
+    </div>
+</div>
+
+<!-- Modal Édition -->
+<div class="modal" id="blockModal">
+    <div class="modal-content">
+        <h3 id="modalTitle">Modifier le bloc</h3>
+        <div id="modalFields"></div>
+        <div class="action-buttons" style="margin-top: 20px;">
+            <button class="btn-secondary" onclick="closeModal()">Annuler</button>
+            <button class="btn-primary" onclick="saveBlockEdit()">Enregistrer</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const SUPABASE_URL = 'https://mhbsoxbsqrxunxthnkzt.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oYnNveGJzcXJ4dW54dGhua3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2MTg3NjcsImV4cCI6MjA5MDE5NDc2N30.SC7Da2qTEq5g2AB4CW_au3H2xGb67L2Id840BZxMsRc';
+    const API_URL = 'http://localhost:3001'; // À remplacer par votre URL backend
+    
+    let supabase = null;
+    let currentUser = null;
+    let blocks = [];
+    let editingBlockIndex = null;
+    
+    // Templates
+    const templates = {
+        welcome: [
+            { type: 'title', content: 'Bienvenue dans la communauté Umbrella !' },
+            { type: 'text', content: 'Nous sommes ravis de vous compter parmi nos membres.' },
+            { type: 'button', content: 'Découvrir nos outils', url: '#' }
+        ],
+        promo: [
+            { type: 'title', content: '🎉 Offre spéciale -50% !' },
+            { type: 'text', content: 'Profitez de notre promotion exceptionnelle.' },
+            { type: 'button', content: 'Profiter de l\'offre', url: '#' }
+        ],
+        news: [
+            { type: 'title', content: '📰 Les nouveautés Umbrella' },
+            { type: 'text', content: 'Découvrez les dernières fonctionnalités.' },
+            { type: 'button', content: 'Explorer', url: '#' }
+        ],
+        event: [
+            { type: 'title', content: '📅 Webinaire exclusif' },
+            { type: 'text', content: 'Rejoignez-nous le 15 mars.' },
+            { type: 'button', content: 'S\'inscrire', url: '#' }
+        ]
+    };
+    
+    // ==================== AUTHENTIFICATION ====================
+    async function initAuth() {
+        try {
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            const { data: { session } } = await supabase.auth.getSession();
+            
+            if (session) {
+                currentUser = session.user;
+                document.getElementById('authStatus').innerHTML = `
+                    <img src="${session.user.user_metadata?.avatar_url || 'https://www.gravatar.com/avatar/?d=mp'}" style="width:32px;height:32px;border-radius:50%;">
+                    <span>Connecté en tant que ${session.user.email}</span>
+                    <button onclick="logout()" style="margin-left:auto; background:none; border:none; cursor:pointer; color:#ef4444;"><i class="fa fa-sign-out-alt"></i></button>
+                `;
+            } else {
+                document.getElementById('authStatus').innerHTML = `
+                    <i class="fa fa-user-circle"></i>
+                    <span>Non connecté</span>
+                    <button onclick="login()" style="margin-left:auto; background:var(--accent); border:none; padding:5px 15px; border-radius:20px; cursor:pointer;">Se connecter</button>
+                `;
+                document.querySelector('.send-panel').style.opacity = '0.5';
+                document.querySelector('.send-panel').style.pointerEvents = 'none';
+            }
+        } catch (error) {
+            console.error('Erreur auth:', error);
+        }
+    }
+    
+    async function login() {
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo: window.location.href }
+        });
+        if (error) showToast('Erreur de connexion', 'error');
+    }
+    
+    async function logout() {
+        await supabase.auth.signOut();
+        location.reload();
+    }
+    
+    // ==================== TOAST ====================
+    function showToast(message, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        const icons = { success: 'fa-check-circle', error: 'fa-exclamation-circle', info: 'fa-info-circle' };
+        toast.innerHTML = `<i class="fa ${icons[type]}"></i><span>${message}</span>`;
+        container.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+    
+    // ==================== NEWSLETTER BUILDER ====================
+    function loadTemplate(templateName) {
+        blocks = JSON.parse(JSON.stringify(templates[templateName]));
+        renderCanvas();
+        showToast(`Template "${templateName}" chargé`, 'success');
+    }
+    
+    function addBlock(type) {
+        let newBlock = { type: type };
+        switch(type) {
+            case 'text': newBlock.content = 'Nouveau texte'; break;
+            case 'image': newBlock.content = 'https://placehold.co/600x300/e2e8f0/64748b?text=Image'; break;
+            case 'button': newBlock.content = 'Nouveau bouton'; newBlock.url = '#'; break;
+            case 'title': newBlock.content = 'Nouveau titre'; break;
+            case 'divider': newBlock.content = ''; break;
+            case 'social': newBlock.content = 'facebook,twitter,linkedin'; break;
+        }
+        blocks.push(newBlock);
+        renderCanvas();
+        showToast(`Bloc ${type} ajouté`, 'success');
+    }
+    
+    function editBlock(index) {
+        editingBlockIndex = index;
+        const block = blocks[index];
+        const modal = document.getElementById('blockModal');
+        const fields = document.getElementById('modalFields');
+        
+        if (block.type === 'text' || block.type === 'title') {
+            fields.innerHTML = `<textarea id="editContent" rows="4" style="width:100%; padding:10px; border-radius:10px;">${block.content || ''}</textarea>`;
+        } else if (block.type === 'image') {
+            fields.innerHTML = `
+                <input type="text" id="editContent" value="${block.content || ''}" placeholder="URL de l'image" style="width:100%; padding:10px; margin-bottom:10px;">
+                <div class="image-upload-area" onclick="document.getElementById('imageFile').click()">
+                    <i class="fa fa-cloud-upload-alt"></i>
+                    <p>Cliquez pour uploader une image</p>
+                </div>
+                <input type="file" id="imageFile" accept="image/*" style="display:none" onchange="handleImageUpload(this)">
+            `;
+        } else if (block.type === 'button') {
+            fields.innerHTML = `
+                <input type="text" id="editContent" value="${block.content || ''}" placeholder="Texte du bouton" style="width:100%; padding:10px; margin-bottom:10px;">
+                <input type="text" id="editUrl" value="${block.url || '#'}" placeholder="URL" style="width:100%; padding:10px;">
+            `;
+        }
+        
+        document.getElementById('modalTitle').innerText = `Modifier le bloc ${block.type}`;
+        modal.classList.add('active');
+    }
+    
+    function handleImageUpload(input) {
+        const file = input.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('editContent').value = e.target.result;
+                showToast('Image chargée', 'success');
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+    
+    function saveBlockEdit() {
+        const block = blocks[editingBlockIndex];
+        block.content = document.getElementById('editContent')?.value || block.content;
+        if (block.type === 'button') {
+            block.url = document.getElementById('editUrl')?.value || '#';
+        }
+        closeModal();
+        renderCanvas();
+        showToast('Bloc modifié', 'success');
+    }
+    
+    function deleteBlock(index) {
+        if (confirm('Supprimer ce bloc ?')) {
+            blocks.splice(index, 1);
+            renderCanvas();
+            showToast('Bloc supprimé', 'info');
+        }
+    }
+    
+    function moveBlockUp(index) {
+        if (index > 0) {
+            [blocks[index - 1], blocks[index]] = [blocks[index], blocks[index - 1]];
+            renderCanvas();
+        }
+    }
+    
+    function moveBlockDown(index) {
+        if (index < blocks.length - 1) {
+            [blocks[index], blocks[index + 1]] = [blocks[index + 1], blocks[index]];
+            renderCanvas();
+        }
+    }
+    
+    function renderCanvas() {
+        const canvas = document.getElementById('emailCanvas');
+        let html = `<div style="background: white;">`;
+        
+        blocks.forEach((block, idx) => {
+            html += `<div class="email-block" data-index="${idx}">
+                        <div class="block-actions">
+                            <button class="block-action edit" onclick="editBlock(${idx})"><i class="fa fa-edit"></i></button>
+                            <button class="block-action move-up" onclick="moveBlockUp(${idx})"><i class="fa fa-arrow-up"></i></button>
+                            <button class="block-action move-down" onclick="moveBlockDown(${idx})"><i class="fa fa-arrow-down"></i></button>
+                            <button class="block-action delete" onclick="deleteBlock(${idx})"><i class="fa fa-trash"></i></button>
+                        </div>`;
+            
+            if (block.type === 'text') {
+                html += `<p style="line-height: 1.6;">${block.content}</p>`;
+            } else if (block.type === 'title') {
+                html += `<h2 style="font-size: 1.5rem; margin: 10px 0;">${block.content}</h2>`;
+            } else if (block.type === 'image') {
+                html += `<img src="${block.content}" style="max-width: 100%; border-radius: 12px;">`;
+            } else if (block.type === 'button') {
+                html += `<div style="text-align: center; margin: 20px 0;">
+                            <a href="${block.url}" style="background: #f5c400; color: #0f172a; padding: 12px 30px; border-radius: 40px; text-decoration: none; display: inline-block;">${block.content}</a>
+                         </div>`;
+            } else if (block.type === 'divider') {
+                html += `<hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">`;
+            } else if (block.type === 'social') {
+                html += `<div style="text-align: center; margin: 20px 0;">
+                            <a href="#" style="color: #64748b; margin: 0 10px;"><i class="fab fa-facebook fa-lg"></i></a>
+                            <a href="#" style="color: #64748b; margin: 0 10px;"><i class="fab fa-twitter fa-lg"></i></a>
+                            <a href="#" style="color: #64748b; margin: 0 10px;"><i class="fab fa-linkedin fa-lg"></i></a>
+                         </div>`;
+            }
+            
+            html += `</div>`;
+        });
+        
+        html += `<div style="background: #f8fafc; padding: 20px; text-align: center; font-size: 12px; color: #64748b;">
+                    <p>© ${new Date().getFullYear()} Umbrella. Tous droits réservés.</p>
+                    <p><a href="{{unsubscribe_url}}" style="color: #f5c400;">Se désabonner</a></p>
+                </div></div>`;
+        
+        canvas.innerHTML = html;
+    }
+    
+    function generateEmailHTML() {
+        let content = '';
+        blocks.forEach(block => {
+            if (block.type === 'text') content += `<p style="line-height: 1.6;">${block.content}</p>`;
+            else if (block.type === 'title') content += `<h2 style="font-size: 1.5rem;">${block.content}</h2>`;
+            else if (block.type === 'image') content += `<img src="${block.content}" style="max-width: 100%;">`;
+            else if (block.type === 'button') content += `<div style="text-align: center;"><a href="${block.url}" style="background: #f5c400; padding: 12px 30px; border-radius: 40px; text-decoration: none;">${block.content}</a></div>`;
+            else if (block.type === 'divider') content += `<hr>`;
+            else if (block.type === 'social') content += `<div style="text-align: center;"><a href="#">Facebook</a> | <a href="#">Twitter</a></div>`;
+        });
+        
+        return `
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="UTF-8"><title>Newsletter</title></head>
+            <body style="font-family: sans-serif; margin: 0; padding: 20px; background: #f8fafc;">
+                <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden;">
+                    <div style="background: #f5c400; padding: 20px; text-align: center;">
+                        <h2 style="margin: 0;">${document.getElementById('senderName').value}</h2>
+                    </div>
+                    <div style="padding: 30px;">${content}</div>
+                    <div style="background: #f8fafc; padding: 20px; text-align: center; font-size: 12px;">
+                        <p>© ${new Date().getFullYear()} Umbrella. Tous droits réservés.</p>
+                        <p><a href="{{unsubscribe_url}}" style="color: #f5c400;">Se désabonner</a></p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
+    }
+    
+    function saveNewsletter() {
+        localStorage.setItem('umbrella_newsletter_draft', JSON.stringify(blocks));
+        showToast('Brouillon sauvegardé', 'success');
+    }
+    
+    function exportHTML() {
+        const html = generateEmailHTML();
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `newsletter_${Date.now()}.html`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('HTML exporté', 'success');
+    }
+    
+    // ==================== ENVOI D'EMAILS ====================
+    async function sendTestEmail() {
+        if (!currentUser) {
+            showToast('Veuillez vous connecter', 'error');
+            return;
+        }
+        
+        const testEmail = document.getElementById('testEmail').value;
+        if (!testEmail) {
+            showToast('Veuillez entrer un email de test', 'warning');
+            return;
+        }
+        
+        showToast('Envoi du test...', 'info');
+        
+        try {
+            const response = await fetch(`${API_URL}/api/newsletter/send`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                },
+                body: JSON.stringify({
+                    subject: document.getElementById('subject').value,
+                    html_content: generateEmailHTML(),
+                    test_email: testEmail
+                })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                showToast('Email de test envoyé !', 'success');
+            } else {
+                showToast('Erreur: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showToast('Erreur de connexion au serveur', 'error');
+        }
+    }
+    
+    async function sendNewsletter() {
+        if (!currentUser) {
+            showToast('Veuillez vous connecter', 'error');
+            return;
+        }
+        
+        if (!confirm('Envoyer cette newsletter à tous les abonnés ?')) return;
+        
+        showToast('Envoi en cours...', 'info');
+        
+        try {
+            const response = await fetch(`${API_URL}/api/newsletter/send`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                },
+                body: JSON.stringify({
+                    subject: document.getElementById('subject').value,
+                    html_content: generateEmailHTML()
+                })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                showToast(`Newsletter envoyée ! ${result.stats.sent}/${result.stats.total} emails`, 'success');
+            } else {
+                showToast('Erreur: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showToast('Erreur de connexion au serveur', 'error');
+        }
+    }
+    
+    function closeModal() {
+        document.getElementById('blockModal').classList.remove('active');
+        editingBlockIndex = null;
+    }
+    
+    // Charger le brouillon
+    const saved = localStorage.getItem('umbrella_newsletter_draft');
+    if (saved) blocks = JSON.parse(saved);
+    else loadTemplate('welcome');
+    
+    initAuth();
+    renderCanvas();
+</script>
+</body>
+</html>

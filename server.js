@@ -169,7 +169,27 @@ app.get('/api/confirm/:token', async (req, res) => {
         res.status(500).send('Erreur lors de la confirmation');
     }
 });
-
+// Récupérer le nombre d'abonnés (authentifié)
+app.get('/api/subscribers/count', async (req, res) => {
+    const user = await authenticateUser(req);
+    if (!user) {
+        return res.status(401).json({ error: 'Non authentifié' });
+    }
+    
+    try {
+        const { count, error } = await supabase
+            .from('subscribers')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', 'active');
+        
+        if (error) throw error;
+        
+        res.json({ count: count || 0 });
+    } catch (error) {
+        console.error('Erreur:', error);
+        res.status(500).json({ error: 'Erreur récupération' });
+    }
+});
 // Désabonnement
 app.get('/api/unsubscribe/:token', async (req, res) => {
     const { token } = req.params;
